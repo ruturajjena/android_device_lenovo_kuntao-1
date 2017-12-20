@@ -17,8 +17,9 @@
 package com.cyanogenmod.settings.device;
 
 import android.content.Context;
-import android.database.ContentObserver;
-import android.media.AudioManager;
+import android.os.PowerManager;
+import android.os.PowerManager.WakeLock;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.view.KeyEvent;
 
@@ -27,42 +28,47 @@ import com.android.internal.os.DeviceKeyHandler;
 public class KeyHandler implements DeviceKeyHandler {
     private static final String TAG = KeyHandler.class.getSimpleName();
 
-    private static final int KEY_ONEKEY_SWITCH = 249;
+    private static final int KEY_LOW_POWER_SWITCH = 249;
 
     private static int lastAction = -1;
-    private static int lastRingerMode;
-    private static int RINGER_MODE_SILENT = AudioManager.RINGER_MODE_SILENT;
 
     private final Context mContext;
-    private AudioManager mAudioManager;
-    private int mRingerMode;
-    private ContentResolver mContentResolver;
+    private final PowerManager mPowerManager;
+    private final WakeLock mSwitchWakeLock;
 
     public KeyHandler(Context context) {
         mContext = context;
-        mAudioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-        mContentResolver = context.getContentResolver();
+        mPowerManager = (PowerManager) mContext.getSystemService(Context.POWER_SERVICE);
+        mSwitchWakeLock = mPowerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK, "SwitchWakeLock");
+    }
 
+    private boolean hasSetupCompleted() {
+        return Settings.Secure.getInt(mContext.getContentResolver(),
+                Settings.Secure.USER_SETUP_COMPLETE, 0) != 0;
     }
 
     public KeyEvent handleKeyEvent(KeyEvent event) {
         int scanCode = event.getScanCode();
         int action = event.getAction();
-        int currentRingerMode = Settings.Global.getInt(mContentResolver,
-                                Settings.Global.MODE_RINGER, AudioManager.RINGER_MODE_NORMAL);
+        boolean isPowerSaveEnabled = mPowerManager.isPowerSaveMode();
 
+        if (!hasSetupCompleted()) {
+            return event;
+        }
 
-        if (scanCode == KEY_ONEKEY_SWITCH && action != lastAction) {
+        if (scanCode == KEY_LOW_POWER_SWITCH && action != lastAction) {
+            mSwitchWakeLock.acquire(3000);
+            mPowerManager.wakeUp(SystemClock.uptimeMillis(), "switch-wakeup");
             if (action == KeyEvent.ACTION_DOWN) {
                 // Switch turned on
-                if (lastRingerMode != RINGER_MODE_SILENT) {
-                    lastRingerMode = currentRingerMode;
-                    mAudioManager.setRingerMode(RINGER_MODE_SILENT);
+                if (!isPowerSaveEnabled) {
+                    mPowerManager.setPowerSaveMode(true);
                 }
             } else if (action == KeyEvent.ACTION_UP) {
                 // Switch turned off
-                if (currentRingerMode == RINGER_MODE_SILENT) {
-                    mAudioManager.setRingerMode(lastRingerMode);
+                if (isPowerSaveEnabled) {
+                    mPowerManager.setPowerSaveMode(false);
                 }
             }
 
