@@ -146,10 +146,6 @@ PRODUCT_PACKAGES += \
     ipacm \
     IPACM_cfg.xml
 
-# KeyHandler
-PRODUCT_PACKAGES += \
-    com.cyanogenmod.keyhandler
-
 # Keylayout
 PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/keylayout/gpio-keys.kl:system/usr/keylayout/gpio-keys.kl \
